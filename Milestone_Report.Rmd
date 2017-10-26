@@ -1,0 +1,230 @@
+---
+title: "Milestone_Report"
+author: "Li Jiang"
+date: "8/3/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("quanteda")
+library("ggplot2")
+```
+
+## Data loading and sampling
+This milesone report is created for exploratory analysis of training dataset (called corpus) for language modeling and development of text prediction algorithm and application. Firstly, I download the corpus data from the course website. The corpus data contains sentences collected from news, twitters and blogs. Next, I load the corpus in English into R session. Since the original dataset is too big, which slows down many functions, only 1% of the training data is randomly sampled and used for subsequent analysis. 
+
+```{r loading and subsampling data, warning=F}
+## Process and sample news dataset
+con <- file("en_US.news.txt")
+news <- readLines(con)
+close(con)
+set.seed(1)
+news_subset = sample(news,size=floor(length(news)*0.01),replace = F)
+
+## Process and sample twitter dataset 
+con <- file("en_US.twitter.txt")
+twitter <- readLines(con)
+close(con)
+set.seed(1)
+twitter_subset = sample(twitter,size=floor(length(twitter)*0.01),replace = F)
+
+## Process and sample blogs dataset 
+con <- file("en_US.blogs.txt")
+blogs <- readLines(con)
+close(con)
+set.seed(1)
+blogs_subset = sample(blogs,size=floor(length(blogs)*0.01),replace = F)
+```
+
+## Basic summary statistics 
+Next, the total number of lines, words and characters for each dataset (news, twitter and blogs) are computed and shown as some bastic statistics. 
+
+```{r basic statistics functions, echo=FALSE}
+## Compute some basic statistics 
+# number of words in a sentence 
+num_words <- function(sentence){
+  length(unlist(strsplit(sentence,split=" ")))
+}
+# Compute average characters and words per line for each file 
+mean_char <- function(txt){
+  mean(sapply(txt,nchar))
+}
+mean_words <- function(txt){
+  mean(sapply(txt,num_words))
+}
+# Compute total # of characters and words 
+totalChars <- function(txt){
+  sum(sapply(txt,nchar))
+}
+totalWords <- function(txt){
+  sum(sapply(txt,num_words))
+}
+```
+
+```{r basic statistics summary table}
+sumLines = numeric()
+sumWords = numeric()
+sumChars = numeric()
+for (txt in list(news,twitter,blogs)){
+  sumLines = c(sumLines,length(txt))
+  sumWords = c(sumWords,totalWords(txt))
+  sumChars = c(sumChars,totalChars(txt))
+}
+summaryStat <- data.frame(type=c("news","twitter","blogs"), totalLines = sumLines, totalWords = sumWords,
+                          totalCharacters = sumChars)
+summaryStat
+```
+
+## Pool news, twitter and blogs subset as a single dataset  
+Then I compute and show average number of words and characters per line for each subsetted dataset. I generate a pooled dataset from all three subsets, taking into account their differences in average number of words per line. In particular, twitters have fewer words per line, on average.  
+
+```{r clean spaces, echo=FALSE, results="hide"}
+rm(news)
+rm(twitter)
+rm(blogs)
+gc()
+news = news_subset
+twitter = twitter_subset
+blogs = blogs_subset
+```
+
+```{r pool datasets}
+size = numeric()
+average_char = numeric()
+average_words = numeric()
+for (txt in list(news,twitter,blogs)){
+  size = c(size,length(txt))
+  average_char = c(average_char,mean_char(txt))
+  average_words = c(average_words,mean_words(txt))
+}
+txt_summary = data.frame(type=c("news","twitter","blogs"), size = size,
+                         mean_characters=average_char,mean_words=average_words)
+txt_summary
+
+num_news = floor(txt_summary$size[2]*txt_summary$mean_words[2]/txt_summary$mean_words[1])
+num_blogs = floor(txt_summary$size[2]*txt_summary$mean_words[2]/txt_summary$mean_words[3])
+combined = c(blogs[1:num_blogs],twitter,news[1:num_news])
+
+## To delete
+## Replace "____" with " "
+```
+
+```{r function definitions, echo=FALSE}
+## Define some useful functions 
+# Expand contractions function 
+extend_contraction <- function(txt){
+  contraction = c("won't", "can't", "'m", "'ll", "'d", "'ve", "'re", "'s", "n't")
+  full = c("will not", "cannot", " am", " will", " had", " have", " are", " is"," not")
+  corrected_txt = NULL
+  for (i in 1:length(txt)){
+    temp = txt[i]
+    for (j in 1:length(contraction)){
+      temp = gsub(contraction[j],full[j],temp)
+    }
+    corrected_txt = c(corrected_txt,temp)
+  }
+  corrected_txt
+}
+
+# Number of words to cover certain % of vocabulary 
+vocabulary_coverage <- function(ngram_freq, threshold){
+  sum = 0 
+  i = 1 
+  sorted = sort(ngram_freq,decreasing=T)
+  while (sum < threshold){
+    sum = sum + sorted[i]
+    i = i+1
+  }
+  i
+}
+
+# Plotting (histogram and barplot) 
+hist_ngram <- function(ngram_freq){
+  ggplot(data=ngram_freq,aes(x=frequency)) + scale_x_log10() + geom_histogram() + 
+    ggtitle("Frequency of ngram=1")+
+    theme(plot.title = element_text(hjust = 0.5,face="bold",size=20),
+          axis.text=element_text(size=6),
+          axis.title=element_text(size=14,face="bold")
+    )
+}
+barplot_ngram <- function(ngram_freq){
+  ngram_sorted = ngram_freq[order(ngram_freq[,2],decreasing=TRUE),]
+  ggplot(data=ngram_sorted[1:20,],aes(x=reorder(ngram,frequency),y=frequency)) + geom_bar(stat="identity") + 
+    ggtitle("Frequency of ngram") + coord_flip() + xlab("ngram") +
+    theme(plot.title = element_text(hjust = 0.5,face="bold",size=20),
+          axis.text=element_text(size=12,face="bold"),
+          axis.title=element_text(size=14,face="bold")
+    )
+}
+```
+
+## Build n-gram models 
+Then I use the pooled subset to generate a corpus object utilizing the "quanteda" package. After that I extract texts from the corpus, expand contractions, and build n-gram tables (n=1-3) from this pooled subset. n-grams is a common language model that is widely applied in the field of natural language processing. Basically a n-gram is a contiguous sequence of n items from a given sequence of text or speech (from Wikipedia). Count tables of unigrams (single words), bigrams (two words sequences) and trigrams (three words sequences) are tabulated, transposed and converted into data frames for subsequent analysis. 
+
+```{r generate dfm}
+txt <- paste(combined,collapse="\n")
+corpus_myft1 <- corpus(txt)
+txt <- texts(corpus_myft1)
+## Expand contraction 
+clean_txt <- extend_contraction(txt)
+## Document-frequency matrix with ngram = 1-3 (without stopwords or stemming) 
+dfm_ngram = list()
+n = 3
+for (i in 1:n){
+  ## Raw ngram counts 
+  temp <- dfm(clean_txt,ngrams=i,tolower=TRUE, remove_punct = TRUE, remove_numbers = TRUE, 
+              remove_symbols = TRUE, remove_twitter = TRUE,stem=FALSE)
+  ## convert to df and frequency
+  temp <- data.frame(t(temp))
+  ## Add columns of ngram words and colnames 
+  colnames(temp) = "frequency"
+  temp$ngram = rownames(temp)
+  temp = temp[c("ngram","frequency")]
+  dfm_ngram[[i]] = temp
+}
+```
+
+## Exploratory analysis of frequencies for unigrams, bigrams and trigrams 
+Then I show the histogram of frequency of unigrams and the top 20 most frequently used unigrams.
+
+```{r unigram analysis, warning = F}
+hist_ngram(dfm_ngram[[1]])
+barplot_ngram(dfm_ngram[[1]])
+```
+
+The histogram of unigram frequencies use log10 scale for x axis. A major peak near 0 indicates that most words are used remarkably sparsely in this corpus (1 or 2 times). A long tail spans words frequencies from 10-1000, indicating that several words are used much more frequently. Then the top 20 most often used words are shown, including common words like "the", "to", "a", etc. 
+
+Then I calculate the minimal number of words required to cover 5% to 95% words instances in this corpus and show a scatterplot to demonstrate the possible correlation between percentage of words instances covered and minimal number of words required to achieve that coverage. 
+
+```{r vocabulary coverage}
+ngram1_norm = dfm_ngram[[1]][,2]/sum(dfm_ngram[[1]][,2])
+cat(vocabulary_coverage(ngram1_norm,0.5), "words cover 50% of all words instances in the corpus\n")
+cat(vocabulary_coverage(ngram1_norm,0.9), "words cover 90% of all words instances in the corpus\n")
+
+## number of words as a function of % coverage 
+coverage = seq(0.05,0.95,by=0.05)
+minWords = numeric()
+for (i in coverage){
+  minWords = c(minWords,vocabulary_coverage(ngram1_norm,i))
+}
+plot(coverage,minWords,main="Words instances coverage by minimal vocabulary",xlab="Coverage",ylab="Minimal number of words")
+```
+
+119 words alone are able to cover 50% words instances in this corpus, but it takes more than 7000 words can cover 90% of words instances. The scatteer plot shows a non-linear relationship between minimal vocabulary and coverage of words instances: a relatively small vocabulary can cover up to 60% of the word instances, followed by a steep increase in the number of words required to cover higher fraction. This indicates that a large vocabulary is still necessary if a significant fraction of words instances needs to be covered.  
+
+Then I show the histogram of frequency of unigrams and the top 20 most frequently used bigrams and trigrams.
+
+```{r bigrams and trigrams, warning=F}
+hist_ngram(dfm_ngram[[2]])
+barplot_ngram(dfm_ngram[[2]])
+hist_ngram(dfm_ngram[[3]])
+barplot_ngram(dfm_ngram[[3]])
+```
+
+For bigrams and trigrams, more word sequences show very small frequencies while the tail becomes narrower, indicating that fewer word sequences are used with high frequency. The top 20 bigrams and trigrams include "of the", "in the", "it is", "i do not", "it is a ", "one of the", etc. These words are also most frequently used unigrams.  
+
+## Future plans for creating the prediction algorithm and Shiny app
+Regarding prediction, algorithm, I will be able to derive normalized frequencies for each terms with count tables for unigrams, bigrams and trigrams, with proper smoothing steps. Then I can use markov models to estimate probabilities for next words and use this context-dependent probability distribution to make prediction algorithms that take words with the highest probability as the most probable next words. I also plan to divide the available corpus data into training and testing sets to estimate the prediction accuracy of my proposed prediction algorithm. 
+
+For Shiny app, I plan to use algorithm elaborated above as internal computing engine and design UI to take user defined language context (mainly sentences) to predict next words. Additionally, user inputs will be pre-processed to build n-grams, which can be plugged into the prediction algorithm. 
