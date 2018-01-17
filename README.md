@@ -23,6 +23,8 @@ A pipeline of R scripts to build a ngram model from corpus from online sources a
 3. Build tokens and ngram tables 
 4. Build normalized frequencies for unigram, bigram, trigram and fourgram sequentially using ngram tables with Kneser-Ney Smoothing 
 
+## prediction_three_choices.R, ui.R and server.R ## are stored in the folder ## next3options ##, together with inputs .csv files. 
+
 ## prediction_three_choices.R
 **Inputs**: .csv files of normalized frequencies for bigrams to fourgrams and a phrase/sentence as preceding words for prediction of the next word <br /> 
 **Outputs**: three words with the highest frequencies given one to three preceding words <br />
