@@ -23,7 +23,8 @@ A pipeline of R scripts to build a ngram model from corpus from online sources a
 3. Build tokens and ngram tables 
 4. Build normalized frequencies for unigram, bigram, trigram and fourgram sequentially using ngram tables with Kneser-Ney Smoothing 
 
-**prediction_three_choices.R, ui.R and server.R** are stored in the folder **nextword3options**, together with inputs .csv files.
+## nextword3options
+Stored all scripts and raw data used to build the shiny app to predict the next words. **prediction_three_choices.R, ui.R and server.R** are stored in the folder **nextword3options**, together with inputs .csv files.
 
 ## prediction_three_choices.R
 **Inputs**: .csv files of normalized frequencies for bigrams to fourgrams and a phrase/sentence as preceding words for prediction of the next word <br /> 
@@ -31,7 +32,7 @@ A pipeline of R scripts to build a ngram model from corpus from online sources a
 **Steps**: <br />
 1. Read in .csv files and the phrase/sentence 
 2. Preprocess the phrase/sentence  
-3. Starting from fourgrams, search for top three words with the highest probability given the three preceding words. If the three preceding words are not found, “downgrade” to trigrams, repeat the process. If still not found, “downgrade” to bigram or unigram. Then output these three words. 
+3. Starting from fourgrams, search for top three words with the highest probability given the three preceding words. If the three preceding words are not found, recursively “downgrade” to trigrams and search for the top three words with the highest probability give the two preceding words. If still not found, “downgrade” to bigram or unigram and repeat the process. Then output these three words. 
 
 ## ui.R and server.R
 ui.R and server.R together make a simple online app that takes a phrase/sentence and outputs three possible next words. The app can be found at https://lijiangds.shinyapps.io/nextword3options/ 
