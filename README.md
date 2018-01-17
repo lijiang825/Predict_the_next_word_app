@@ -13,6 +13,7 @@ A pipeline of R scripts to build a ngram model from corpus from online sources a
 4. Show histograms of unigrams, bigrams and trigrams 
 5. Show a scatterplot of correlation between percentage of words instances covered and minimal number of words required to achieve that coverage.
 6. Show a histogram of top 20 most frequently used bigrams and trigrams 
+A published html version can be found on Rpubs: https://rpubs.com/missingboy/296695
 
 ## KN_Ngram_model.R
 **Inputs**: .txt file of corpus of online news, blogs and tweets <br />
@@ -36,3 +37,4 @@ Stored all scripts and raw data used to build the shiny app to predict the next 
 
 ## ui.R and server.R
 ui.R and server.R together make a simple online app that takes a phrase/sentence and outputs three possible next words. The app can be found at https://lijiangds.shinyapps.io/nextword3options/ 
+A published short presentation of this can be found on Rpubs: https://rpubs.com/missingboy/302036
